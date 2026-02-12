@@ -188,12 +188,16 @@ func New(options *Options) (*HTTPX, error) {
 	if httpx.Options.SniName != "" {
 		tlsConfigH2.ServerName = httpx.Options.SniName
 	}
+	useProxyForH2 := httpx.Options.Proxy != "" && httpx.Options.Protocol == "http2"
 	transport2 := &http2.Transport{
 		TLSClientConfig: tlsConfigH2,
 		AllowHTTP:       true,
 		DialTLSContext: func(ctx context.Context, network, addr string, cfg *tls.Config) (net.Conn, error) {
 			if cfg == nil {
 				cfg = tlsConfigH2
+			}
+			if useProxyForH2 {
+				return dialTLSViaProxy(ctx, network, addr, cfg, httpx.Options.Proxy, httpx.Dialer, httpx.Options)
 			}
 			if options.TlsImpersonateChrome {
 				return httpx.Dialer.DialTLSWithConfigImpersonate(ctx, network, addr, cfg, impersonate.Chrome, nil)
