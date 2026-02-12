@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/andybalholm/brotli"
 	stringsutil "github.com/projectdiscovery/utils/strings"
 	"golang.org/x/text/encoding/korean"
 	"golang.org/x/text/encoding/simplifiedchinese"
@@ -53,8 +54,20 @@ func DecodeKorean(s []byte) ([]byte, error) {
 	return koreanDecoder.Bytes(s)
 }
 
-// ExtractTitle from a response
+// DecodeData decompresses and decodes response body (e.g. Content-Encoding: br) and applies charset conversion.
 func DecodeData(data []byte, headers http.Header) ([]byte, error) {
+	// Content-Encoding: br (brotli) — Go's net/http does not auto-decompress brotli for HTTP/2.
+	// Only decompress when the header explicitly says "br"; trying brotli on gzip data produces
+	// garbage and breaks title extraction when the server alternates between gzip and br.
+	enc := strings.ToLower(strings.TrimSpace(headers.Get("Content-Encoding")))
+	if strings.Contains(enc, "br") {
+		dec := brotli.NewReader(bytes.NewReader(data))
+		decompressed, err := io.ReadAll(dec)
+		if err == nil && len(decompressed) > 0 {
+			data = decompressed
+		}
+	}
+
 	// Non UTF-8
 	if contentTypes, ok := headers["Content-Type"]; ok {
 		contentType := strings.ToLower(strings.Join(contentTypes, ";"))

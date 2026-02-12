@@ -234,6 +234,8 @@ func New(options *Options) (*Runner, error) {
 	}
 	httpxOptions.Resolvers = options.Resolvers
 	httpxOptions.TlsImpersonate = options.TlsImpersonate
+	httpxOptions.TlsImpersonateChrome = options.TlsImpersonateChrome
+	httpxOptions.BrowserHeaders = options.BrowserHeaders
 	httpxOptions.Protocol = httpx.Proto(options.Protocol)
 
 	var key, value string
@@ -253,6 +255,31 @@ func New(options *Options) (*Runner, error) {
 		key = strings.TrimSpace(tokens[0])
 		value = strings.TrimSpace(tokens[1])
 		httpxOptions.CustomHeaders[key] = value
+	}
+	if options.BrowserHeaders {
+		// Set browser-like headers only if not already set by -H (match real Chrome)
+		for _, hdr := range []struct{ key, value string }{
+			{"Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"},
+			{"Accept-Encoding", "gzip, deflate, br"},
+			{"Accept-Language", "en-US,en;q=0.5"},
+			{"User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"},
+			{"Sec-Fetch-Dest", "document"},
+			{"Sec-Fetch-Mode", "navigate"},
+			{"Sec-Fetch-Site", "none"},
+			{"Sec-Fetch-User", "?1"},
+			{"Upgrade-Insecure-Requests", "1"},
+		} {
+			has := false
+			for k := range httpxOptions.CustomHeaders {
+				if strings.EqualFold(k, hdr.key) {
+					has = true
+					break
+				}
+			}
+			if !has {
+				httpxOptions.CustomHeaders[hdr.key] = hdr.value
+			}
+		}
 	}
 	httpxOptions.SniName = options.SniName
 

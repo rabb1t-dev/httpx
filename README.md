@@ -202,7 +202,7 @@ OUTPUT:
    -include-chain                         include redirect http chain in JSON output (-json only)
    -store-chain                           include http redirect chain in responses (-sr only)
    -svrc, -store-vision-recon-cluster     include visual recon clusters (-ss and -sr only)
-   -pr, -protocol string                  protocol to use (unknown, http11)
+   -pr, -protocol string                  protocol to use (unknown, http11, http2)
    -fepp, -filter-error-page-path string  path to store filtered error pages (default "filtered_error_page.json")
    -lof, -list-output-fields              list available output field names for filtering
    -eof, -exclude-output-fields string[]  exclude specified output fields from results
@@ -232,6 +232,8 @@ CONFIGURATIONS:
    -ztls                            use ztls library with autofallback to standard one for tls13
    -no-decode                       avoid decoding body
    -tlsi, -tls-impersonate          enable experimental client hello (ja3) tls randomization
+   -tls-impersonate-chrome          use Chrome JA3 fingerprint for TLS to avoid scanner/WAF detection
+   -browser-headers                 send browser-like Accept and Accept-Encoding headers to reduce WAF blocks
    -no-stdin                        Disable Stdin processing
    -hae, -http-api-endpoint string  experimental http api endpoint
    -sf, -secret-file string         path to secret file for authentication
@@ -314,6 +316,8 @@ For details about running httpx, see https://docs.projectdiscovery.io/tools/http
    - `-http2`
    - `-pipeline`
    - `-tls-impersonate`
+   - `-tls-impersonate-chrome`
+   - `-browser-headers`
 
 
 # Acknowledgement

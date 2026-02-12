@@ -59,6 +59,8 @@ type Options struct {
 	customCookies             []*http.Cookie
 	SniName                   string
 	TlsImpersonate            bool
+	TlsImpersonateChrome      bool // use Chrome JA3 (overrides Random when both set)
+	BrowserHeaders            bool // send browser-like headers; skip Accept-Charset to match real browsers
 	NetworkPolicy             *networkpolicy.NetworkPolicy
 	CDNCheckClient            *cdncheck.Client
 	Protocol                  Proto

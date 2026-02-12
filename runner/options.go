@@ -329,6 +329,8 @@ type Options struct {
 	Screenshot           bool
 	UseInstalledChrome   bool
 	TlsImpersonate       bool
+	TlsImpersonateChrome bool
+	BrowserHeaders       bool
 	DisableStdin         bool
 	HttpApiEndpoint      string
 	NoScreenshotBytes    bool
@@ -526,6 +528,8 @@ func ParseOptions() *Options {
 		flagSet.BoolVar(&options.ZTLS, "ztls", false, "use ztls library with autofallback to standard one for tls13"),
 		flagSet.BoolVar(&options.NoDecode, "no-decode", false, "avoid decoding body"),
 		flagSet.BoolVarP(&options.TlsImpersonate, "tls-impersonate", "tlsi", false, "enable experimental client hello (ja3) tls randomization"),
+		flagSet.BoolVar(&options.TlsImpersonateChrome, "tls-impersonate-chrome", false, "use Chrome JA3 fingerprint for TLS to avoid scanner/WAF detection"),
+		flagSet.BoolVar(&options.BrowserHeaders, "browser-headers", false, "send browser-like Accept and Accept-Encoding headers to reduce WAF blocks"),
 		flagSet.BoolVar(&options.DisableStdin, "no-stdin", false, "Disable Stdin processing"),
 		flagSet.StringVarP(&options.HttpApiEndpoint, "http-api-endpoint", "hae", "", "experimental http api endpoint"),
 		flagSet.StringVarP(&options.SecretFile, "secret-file", "sf", "", "path to the secret file for authentication"),
@@ -796,7 +800,7 @@ func (options *Options) ValidateOptions() error {
 		options.OutputCDN = "true"
 	}
 
-	if !stringsutil.EqualFoldAny(options.Protocol, string(httpxcommon.UNKNOWN), string(httpxcommon.HTTP11)) {
+	if !stringsutil.EqualFoldAny(options.Protocol, string(httpxcommon.UNKNOWN), string(httpxcommon.HTTP11), string(httpxcommon.HTTP2)) {
 		return fmt.Errorf("invalid protocol: %s", options.Protocol)
 	}
 

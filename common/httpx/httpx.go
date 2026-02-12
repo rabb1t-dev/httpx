@@ -140,6 +140,9 @@ func New(options *Options) (*HTTPX, error) {
 	transport := &http.Transport{
 		DialContext: httpx.Dialer.Dial,
 		DialTLSContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			if options.TlsImpersonateChrome {
+				return httpx.Dialer.DialTLSWithConfigImpersonate(ctx, network, addr, &tls.Config{InsecureSkipVerify: true, MinVersion: tls.VersionTLS10}, impersonate.Chrome, nil)
+			}
 			if options.TlsImpersonate {
 				return httpx.Dialer.DialTLSWithConfigImpersonate(ctx, network, addr, &tls.Config{InsecureSkipVerify: true, MinVersion: tls.VersionTLS10}, impersonate.Random, nil)
 			}
@@ -177,26 +180,45 @@ func New(options *Options) (*HTTPX, error) {
 		transport.Proxy = http.ProxyURL(proxyURL)
 	}
 
-	httpx.client = retryablehttp.NewWithHTTPClient(&http.Client{
-		Transport:     transport,
-		Timeout:       httpx.Options.Timeout,
-		CheckRedirect: redirectFunc,
-	}, retryablehttpOptions)
-
-	transport2 := &http2.Transport{
-		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: true,
-			MinVersion:         tls.VersionTLS10,
-		},
-		AllowHTTP: true,
+	// HTTP/2 transport with same JA3 impersonation as HTTP/1.1
+	tlsConfigH2 := &tls.Config{
+		InsecureSkipVerify: true,
+		MinVersion:         tls.VersionTLS10,
 	}
 	if httpx.Options.SniName != "" {
-		transport2.TLSClientConfig.ServerName = httpx.Options.SniName
+		tlsConfigH2.ServerName = httpx.Options.SniName
+	}
+	transport2 := &http2.Transport{
+		TLSClientConfig: tlsConfigH2,
+		AllowHTTP:       true,
+		DialTLSContext: func(ctx context.Context, network, addr string, cfg *tls.Config) (net.Conn, error) {
+			if cfg == nil {
+				cfg = tlsConfigH2
+			}
+			if options.TlsImpersonateChrome {
+				return httpx.Dialer.DialTLSWithConfigImpersonate(ctx, network, addr, cfg, impersonate.Chrome, nil)
+			}
+			if options.TlsImpersonate {
+				return httpx.Dialer.DialTLSWithConfigImpersonate(ctx, network, addr, cfg, impersonate.Random, nil)
+			}
+			return httpx.Dialer.DialTLSWithConfig(ctx, network, addr, cfg)
+		},
 	}
 	httpx.client2 = &http.Client{
 		Transport: transport2,
 		Timeout:   httpx.Options.Timeout,
 	}
+
+	// Main client: use HTTP/2 transport when Protocol is http2, else HTTP/1.1
+	var mainTransport http.RoundTripper = transport
+	if httpx.Options.Protocol == "http2" {
+		mainTransport = transport2
+	}
+	httpx.client = retryablehttp.NewWithHTTPClient(&http.Client{
+		Transport:     mainTransport,
+		Timeout:       httpx.Options.Timeout,
+		CheckRedirect: redirectFunc,
+	}, retryablehttpOptions)
 
 	httpx.htmlPolicy = bluemonday.NewPolicy()
 	httpx.CustomHeaders = httpx.Options.CustomHeaders
@@ -420,8 +442,10 @@ func (h *HTTPX) NewRequestWithContext(ctx context.Context, method, targetURL str
 	if !h.Options.Unsafe {
 		// set default user agent
 		req.Header.Set("User-Agent", h.Options.DefaultUserAgent)
-		// set default encoding to accept utf8
-		req.Header.Add("Accept-Charset", "utf-8")
+		// real browsers don't send Accept-Charset; skip when using browser-like headers
+		if !h.Options.BrowserHeaders {
+			req.Header.Add("Accept-Charset", "utf-8")
+		}
 	}
 	return
 }
@@ -442,7 +466,8 @@ func (h *HTTPX) SetCustomHeaders(r *retryablehttp.Request, headers map[string]st
 			r.Header.Set(name, value)
 		}
 	}
-	if h.Options.RandomAgent {
+	// Only overwrite User-Agent with random if it wasn't explicitly set (e.g. by -H or -browser-headers)
+	if h.Options.RandomAgent && r.Header.Get("User-Agent") == h.Options.DefaultUserAgent {
 		userAgent := useragent.PickRandom()
 		r.Header.Set("User-Agent", userAgent.Raw) //nolint
 	}
